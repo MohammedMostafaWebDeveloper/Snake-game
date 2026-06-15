@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snake game</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo+Play:wght@200..1000&family=Pixelify+Sans:wght@400..700&display=swap" rel="stylesheet">
+    <style>
+        *{
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body{
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: rgb(24, 36, 10);
+        }
+        #game{
+            height: 100vh;
+            width: fit-content;
+            display: flex;
+            justify-content: center ;
+            background: #578a34;
+            flex-direction: column;
+            align-items: center;
+            overflow: hidden;
+        }
+        #background{
+            position: relative;
+        }
+        #foreground{
+            position: absolute;
+            top: 20px;
+            left: 20px;
+        }
+        #con{
+            position: relative;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #tools{
+            width: 100%;
+            height: 50px;
+            background-color: #355a1c;
+            display: flex;
+            justify-content: space-between;
+            padding: 10px;
+        }
+        .tool img{
+            height: 100%;
+            filter: invert(100%) sepia(34%) saturate(0%) hue-rotate(194deg) brightness(114%) contrast(100%);
+        }
+        .tool{
+            height: 100%;
+            background: none;
+            border: none;
+            outline: none;
+        }
+        .icon{
+            height: 100%;
+            margin: 5px;
+        }
+        #left, #right{
+            display: flex;
+            align-items: center;
+        }
+        #score, #highest-score{
+            color: white;
+            font-size: 30px;
+            font-family: "Pixelify Sans", sans-serif;
+        }
+        #gameover{
+            position: absolute;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 20px;
+            font-family: "Pixelify Sans", sans-serif;
+            font-size: 50px;
+            color: white;
+        }
+        #play-again{
+            border: none;
+            outline: none;
+            font-family: "Pixelify Sans", sans-serif;
+            background-color: hsl(220, 70%, 45%);
+            color: white;
+            font-size: 25px;
+            padding: 10px;
+        }
+        #play-again:hover{
+            background-color: hsl(220, 71%, 36%);
+        }
+        button{
+            cursor: pointer;
+        }
+        
+    </style>
+</head>
+<body>
+    <div id="game">
+        <div id="tools">
+            <div id="left">
+                <button class="tool" id="mute"><img src="assets/icons/mute.svg"></button>
+                <button class="tool" id="unmute" style="display: none;"><img src="assets/icons/unmute.svg"></button>
+                <button class="tool" id="fullscreen"><img src="assets/icons/fullscreen.svg"></button>
+                <button class="tool" id="compress" style="display: none;"><img src="assets/icons/compress.svg"></button>
+            </div>
+            <div id="right">
+                <label id="score">0</label>
+                <img src="assets/sprites/egg.png" class="icon">
+                <label id="highest-score">0</label>
+                <img src="assets/icons/trophy.png" class="icon">
+            </div>
+        </div>
+        <div id="con">
+            <canvas id="background"></canvas>
+            <canvas id="foreground"></canvas>
+            <div id="gameover">
+                GAME OVER!
+                <button id="play-again" onclick="playAgain()">Play Again</button>
+            </div>
+        </div>
+    </div>
+    
+    
+    <script>
+        var canvas = document.getElementById("foreground")
+        var background = document.getElementById("background")
+        var mute = document.getElementById("mute")
+        var unmute = document.getElementById("unmute")
+        var fullscreen = document.getElementById("fullscreen")
+        var compress = document.getElementById("compress")
+
+        var c = canvas.getContext("2d")
+        var bc = background.getContext("2d")
+
+        var game_size = [17, 15]
+        var cell_size = Math.floor(Math.min(innerWidth / game_size[0], (innerHeight - 90) / game_size[1]))
+
+        canvas.width = game_size[0] * cell_size
+        canvas.height = game_size[1] * cell_size
+        background.width = canvas.width
+        background.height = canvas.height
+
+        var egg = new Image()
+        egg.src = "assets/sprites/egg.png"
+
+        var eating_sound = new Audio("assets/sounds/eating sound.wav")
+        eating_sound.preservesPitch = false
+
+        var rotate_sound = new Audio("assets/sounds/rotate sound.wav")
+        rotate_sound.preservesPitch = false
+
+        c.imageSmoothingEnabled = false
+
+        var fruits = []
+
+        var started = false
+        var gameover = false
+
+        var touch_pos = {x: undefined, y: undefined}
+
+        var score = 0
+        var highest_score = 0
+        if (!localStorage.getItem("highest_score")) {
+            localStorage.setItem("highest_score", 0)
+        }
+        highest_score = localStorage.getItem("highest_score")
+        document.getElementById("highest-score").innerHTML = highest_score
+
+        var muted = false
+        
+        mute.onclick = function () {
+            muted = true
+            mute.style.display = "none"
+            unmute.style.display = "inline-block"
+        }
+        unmute.onclick = function () {
+            muted = false
+            unmute.style.display = "none"
+            mute.style.display = "inline-block"
+        }
+        fullscreen.onclick = function () {
+            document.body.requestFullscreen()
+            fullscreen.style.display = "none"
+            compress.style.display = "inline-block"
+        }
+        compress.onclick = function () {
+            document.exitFullscreen()
+            compress.style.display = "none"
+            fullscreen.style.display = "inline-block"
+        }
+
+        function drawGrid(color1, color2) {
+            for (var i = 0; i < game_size[0]; i++) {
+                for (var j = 0; j < game_size[1]; j++) {
+                    var pos = getCoordinates(i, j)
+                    if ((i + j) % 2 == 0) {
+                        bc.fillStyle = color1
+                    }
+                    else {
+                        bc.fillStyle = color2
+                    }
+                    bc.fillRect(pos[0], pos[1], cell_size, cell_size)
+                }
+            }
+        }
+        drawGrid("#aad751", "#a2d149")
+
+        function updateScore(val) {
+            score = val
+            document.getElementById("score").innerHTML = score
+            if (score <= highest_score) {
+                return
+            }
+            highest_score  = val
+            localStorage.setItem("highest_score", val)
+            document.getElementById("highest-score").innerHTML = highest_score
+        }
+
+        window.onresize = function () {
+            cell_size = Math.floor(Math.min(innerWidth / game_size[0], (innerHeight - 90) / game_size[1]))
+
+            canvas.width = game_size[0] * cell_size
+            canvas.height = game_size[1] * cell_size
+            background.width = canvas.width
+            background.height = canvas.height
+            drawGrid("#aad751", "#a2d149")
+        }
+
+        function getCoordinates(i, j) {
+            return [i * cell_size, j * cell_size]
+        }
+
+        function playSound(sound, pitch, start) {
+            if (muted == true) {
+                return
+            }
+            sound.pause()
+            sound.currentTime = start
+            sound.playbackRate = pitch
+            sound.play()
+        }
+
+        function newFruit() {
+            while (true) {
+                var found = true
+                var pos = [Math.round(Math.random() * (game_size[0] - 1)), Math.round(Math.random() * (game_size[1] - 1))]
+                snake.body.forEach(cell => {
+                    if (cell[0] == pos[0] && cell[1] == pos[1]) {
+                        found = false
+                    }
+                })
+                fruits.forEach(cell => {
+                    if (cell[0] == pos[0] && cell[1] == pos[1]) {
+                        found = false
+                    }
+                })
+                if (found == true) {
+                    fruits.push([pos[0], pos[1], 0])
+                    break
+                }
+            }
+        }
+
+        
+        
+
+        class Snake {
+            constructor() {
+                this.body = []
+                for (var i = 0; i < 4; i++) {
+                    this.body.push([i, Math.floor(game_size[1] / 2)])
+                }
+                this.dir = []
+                this.speed = 7
+                this.sector = 1
+                this.tail_sector = 1;
+                this.growing = false
+                this.hue = 220
+                this.sat = 70
+                this.light = 45
+            }
+            draw() {
+                for (var i = 0; i < this.body.length; i++) {
+                    if (gameover) {
+                        this.sector = 0
+                        this.tail_sector = 0
+                    }
+                    var pos = getCoordinates(this.body[i][0], this.body[i][1])
+
+                    c.fillStyle = `hsl(${this.hue}, ${this.sat}%, ${this.light + (i / this.body.length) * 20}%)`
+                    if (i == 0) {
+                        var dir = [this.body[1][0] - this.body[0][0], this.body[1][1] - this.body[0][1]]
+                        pos[0] += Math.max(dir[0], 0) * this.tail_sector * cell_size
+                        pos[1] += Math.max(dir[1], 0) * this.tail_sector * cell_size
+                        var width = cell_size * (1 + Math.min(dir[0], 0) * this.tail_sector)
+                        var height = cell_size * (1 + Math.min(dir[1], 0) * this.tail_sector)
+                        c.fillRect(pos[0], pos[1], width, height)
+                    }
+                    else if (i == this.body.length - 1) {
+                        var dir = [this.body[i - 1][0] - this.body[i][0], this.body[i - 1][1] - this.body[i][1]]
+                        pos[0] += Math.max(dir[0], 0) * (1 - this.sector) * cell_size
+                        pos[1] += Math.max(dir[1], 0) * (1 - this.sector) * cell_size
+                        var width = cell_size * (1 + Math.min(dir[0], 0) * (1 - this.sector))
+                        var height = cell_size * (1 + Math.min(dir[1], 0) * (1 - this.sector))
+                        c.fillRect(pos[0], pos[1], width, height)
+                    }
+                    else {
+                        c.fillRect(pos[0], pos[1], cell_size, cell_size)
+                    }
+                    
+                }
+            }
+            collide() {
+                if (this.body.at(-1)[0] < 0 || this.body.at(-1)[0] >= game_size[0] || this.body.at(-1)[1] < 0 || this.body.at(-1)[1] >= game_size[1]) {
+                    gameover = true
+                    document.getElementById("gameover").style.display = "flex"
+                    return
+                }
+                for (var i = 0; i < this.body.length - 1; i++) {
+                    if (this.body.at(-1)[0] == this.body[i][0] && this.body.at(-1)[1] == this.body[i][1]) {
+                        gameover = true
+                        document.getElementById("gameover").style.display = "flex"
+                        return
+                    }
+                }
+                
+            }
+
+            update(dt) {
+                this.sector += this.speed * dt
+                if (!this.growing) {
+                    this.tail_sector = this.sector
+                }
+                if (this.sector >= 1) {
+                    if (this.dir.length > 1) {
+                        this.dir.shift()
+                    }
+                    this.sector --
+                    if (!this.growing) {
+                        this.tail_sector--
+                        this.body.shift()
+                    }
+                    this.growing = false
+                    this.body.push([this.body[this.body.length - 1][0] + this.dir[0][0], this.body[this.body.length - 1][1] + this.dir[0][1]])
+                    this.collide()
+                    this.eat()
+                }
+                
+                this.draw()
+            }
+            eat() {
+                fruits.forEach(fruit => {
+                    if (this.body[this.body.length - 1][0] == fruit[0] && this.body[this.body.length - 1][1] == fruit[1]) {
+                        fruits.splice(fruits.indexOf(fruit), 1)
+                        playSound(eating_sound, Math.random() * 0.5 + 0.9, 0.15)
+                        newFruit()
+                        this.growing = true
+                        updateScore(this.body.length - 3)
+                    }
+                })
+            }
+        }
+        var snake = new Snake()
+        newFruit()
+        
+        
+        function left() {
+            if (snake.dir.length > 0 && Math.abs(snake.dir[snake.dir.length-1][0]) == 1 && snake.dir[snake.dir.length-1][1] == 0) {
+                return
+            }
+            snake.dir.push([-1, 0])
+            playSound(rotate_sound, 0.85, 0)
+        }
+        function up() {
+            if (snake.dir.length > 0 && snake.dir[snake.dir.length-1][0] == 0 && Math.abs(snake.dir[snake.dir.length-1][1]) == 1) {
+                return
+            }
+            snake.dir.push([0, -1])
+            started = true
+            playSound(rotate_sound, 0.8, 0)
+        }
+        function right() {
+            if (snake.dir.length > 0 && Math.abs(snake.dir[snake.dir.length-1][0]) == 1 && snake.dir[snake.dir.length-1][1] == 0) {
+                return
+            }
+            snake.dir.push([1, 0])
+            started = true
+            playSound(rotate_sound, 0.75, 0)
+        }
+        function down() {
+            if (snake.dir.length > 0 && snake.dir[snake.dir.length-1][0] == 0 && Math.abs(snake.dir[snake.dir.length-1][1]) == 1) {
+                return
+            }
+            snake.dir.push([0, 1])
+            started = true
+            playSound(rotate_sound, 0.7, 0)
+        }
+
+        window.onkeydown = function (e) {
+            if (snake.dir.length > 2) {
+                return
+            }
+            if (e.keyCode == 37 && started) {
+                left()
+            }
+            else if (e.keyCode == 38) {
+                up()
+            }
+            else if (e.keyCode == 39) {
+                right()
+            }
+            else if (e.keyCode == 40) {
+                down()
+            }
+        }
+
+        window.ontouchstart = function (e) {
+            touch_pos = {x: e.touches[0].clientX, y: e.touches[0].clientY}
+        }
+        window.ontouchmove = function (e) {
+            var pos = {x: e.touches[0].clientX, y: e.touches[0].clientY}
+            var max = 70
+            if (pos.x - touch_pos.x < -max) {
+                left()
+            }
+            else if (pos.y - touch_pos.y < -max) {
+                up()
+            }
+            else if (pos.x - touch_pos.x > max) {
+                right()
+            }
+            else if (pos.y - touch_pos.y > max) {
+                down()
+            }
+            else {
+                return
+            }
+            touch_pos = pos
+        }
+
+        var t0 = 0
+
+        function playAgain() {
+            document.getElementById("gameover").style.display = "none"
+            snake.body = []
+            for (var i = 0; i < 4; i++) {
+                snake.body.push([i, Math.floor(game_size[1] / 2)])
+            }
+            updateScore(0)
+            gameover = false
+            fruits = []
+            newFruit()
+            snake.dir = []
+            snake.speed = 7
+            snake.sector = 1
+            snake.tail_sector = 1;
+            snake.growing = false
+            started = false
+        }
+
+        function animate(t) {
+            requestAnimationFrame(animate)
+            c.clearRect(0, 0, canvas.width, canvas.height)
+            if (!started || gameover) {
+                snake.draw()
+                fruits.forEach(fruit => {
+                    var pos = getCoordinates(fruit[0], fruit[1])
+                    c.drawImage(egg, pos[0], pos[1], cell_size, cell_size)
+                })
+                return
+            }
+            var dt = (t - t0) / 1000
+            t0 = t
+            if (isNaN(dt) || dt > 0.1) {
+                dt = 0
+            }
+            
+            snake.update(dt)
+            fruits.forEach(fruit => {
+                var pos = getCoordinates(fruit[0], fruit[1])
+                c.drawImage(egg, pos[0], pos[1] + Math.sin(fruit[2]) * 5, cell_size, cell_size)
+                fruit[2] += dt * 7
+            })
+        }
+        animate()
+    </script>
+</body>
+</html>
