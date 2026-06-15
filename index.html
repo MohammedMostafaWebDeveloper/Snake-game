@@ -12,7 +12,6 @@
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-
         }
         body{
             display: flex;
@@ -131,7 +130,6 @@
             </div>
         </div>
     </div>
-    
     
     <script>
         var canvas = document.getElementById("foreground")
@@ -272,9 +270,6 @@
                 }
             }
         }
-
-        
-        
 
         class Snake {
             constructor() {
@@ -431,7 +426,7 @@
         }
         window.ontouchmove = function (e) {
             var pos = {x: e.touches[0].clientX, y: e.touches[0].clientY}
-            var max = 70
+            var max = 50
             if (pos.x - touch_pos.x < -max) {
                 left()
             }
