@@ -1,7 +1,7 @@
 # Snake game
 A simple recreation of the traditional snake game using HTML5 canvas and JavaScript
 
-The idea is straight forward, collect eggs and grow the snake, try to survive as long as you can without colliding with the walls or yourself. There are some mysterious eggs that you can eat, but keep in mind that they can bring you good or bad things.
+The idea is straight forward, collect eggs and grow the snake, try to survive as long as you can without colliding with the walls or yourself. Each egg you eat, there is a 20% change that a mysterious egg spawns, but keep in mind that it can give you positive or negative powerups randomly.
 
 # About this project
 This project is made using vanilla JS, the canvas API and local storage to practice basic game development skills without relying on any libraries.
