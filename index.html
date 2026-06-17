@@ -51,6 +51,7 @@
             display: flex;
             justify-content: space-between;
             padding: 10px;
+            position: relative;
         }
         .tool img{
             height: 100%;
@@ -102,6 +103,28 @@
         button{
             cursor: pointer;
         }
+        #middle{
+            position: absolute;
+            left: 50%;
+            bottom: 50%;
+            translate: -50% +50%;
+        }
+        #powerup{
+            --percent: 100%;
+            font-family: "Pixelify Sans", sans-serif;
+            color: white;
+            font-size: 25px;
+        }
+        #powerup::after{
+            content: "";
+            position: absolute;
+            left: 0;
+            bottom: -5px;
+            background-color: hsl(220, 100%, 69%);
+            width: var(--percent);
+            height: 5px;
+        }
+        
         
     </style>
 </head>
@@ -113,6 +136,9 @@
                 <button class="tool" id="unmute" style="display: none;"><img src="assets/icons/unmute.svg"></button>
                 <button class="tool" id="fullscreen"><img src="assets/icons/fullscreen.svg"></button>
                 <button class="tool" id="compress" style="display: none;"><img src="assets/icons/compress.svg"></button>
+            </div>
+            <div id="middle">
+                <div id="powerup"></div>
             </div>
             <div id="right">
                 <label id="score">0</label>
@@ -138,6 +164,7 @@
         var unmute = document.getElementById("unmute")
         var fullscreen = document.getElementById("fullscreen")
         var compress = document.getElementById("compress")
+        var powerup_con = document.getElementById("powerup")
 
         var c = canvas.getContext("2d")
         var bc = background.getContext("2d")
@@ -152,21 +179,33 @@
 
         var egg = new Image()
         egg.src = "assets/sprites/egg.png"
+        
+        var mystery_egg = new Image()
+        mystery_egg.src = "assets/sprites/Mystery.png"
 
         var eating_sound = new Audio("assets/sounds/eating sound.wav")
         eating_sound.preservesPitch = false
 
         var rotate_sound = new Audio("assets/sounds/rotate sound.wav")
         rotate_sound.preservesPitch = false
+        
+        var mystery_sound = new Audio("assets/sounds/mystery sound.wav")
+        mystery_sound.preservesPitch = false
 
         c.imageSmoothingEnabled = false
 
         var fruits = []
+        var mysteries = []
 
         var started = false
         var gameover = false
 
         var touch_pos = {x: undefined, y: undefined}
+
+        var powerups = [["Speed Up", 7], ["Slow Down", 10], ["More Fruits", 10], ["Grow Up", 2], ["Shrink Down", 2], ["Invincible", 15], ["2x Score", 15]]
+        var powerup = ""
+        var powerup_time = 0
+        var current_time = 0
 
         var score = 0
         var highest_score = 0
@@ -216,13 +255,13 @@
         drawGrid("#aad751", "#a2d149")
 
         function updateScore(val) {
-            score = val
+            score += val
             document.getElementById("score").innerHTML = score
             if (score <= highest_score) {
                 return
             }
-            highest_score  = val
-            localStorage.setItem("highest_score", val)
+            highest_score = score
+            localStorage.setItem("highest_score", highest_score)
             document.getElementById("highest-score").innerHTML = highest_score
         }
 
@@ -251,6 +290,9 @@
         }
 
         function newFruit() {
+            if (snake.body.length + fruits.length + mysteries.length >= game_size[0] * game_size[1]) {
+                return
+            }
             while (true) {
                 var found = true
                 var pos = [Math.round(Math.random() * (game_size[0] - 1)), Math.round(Math.random() * (game_size[1] - 1))]
@@ -264,8 +306,41 @@
                         found = false
                     }
                 })
+                mysteries.forEach(cell => {
+                    if (cell[0] == pos[0] && cell[1] == pos[1]) {
+                        found = false
+                    }
+                })
                 if (found == true) {
                     fruits.push([pos[0], pos[1], 0])
+                    break
+                }
+            }
+        }
+        function newMystery() {
+            if (snake.body.length + fruits.length + mysteries.length >= game_size[0] * game_size[1] || powerup !== "" || mysteries.length > 0) {
+                return
+            }
+            while (true) {
+                var found = true
+                var pos = [Math.round(Math.random() * (game_size[0] - 1)), Math.round(Math.random() * (game_size[1] - 1))]
+                snake.body.forEach(cell => {
+                    if (cell[0] == pos[0] && cell[1] == pos[1]) {
+                        found = false
+                    }
+                })
+                fruits.forEach(cell => {
+                    if (cell[0] == pos[0] && cell[1] == pos[1]) {
+                        found = false
+                    }
+                })
+                mysteries.forEach(cell => {
+                    if (cell[0] == pos[0] && cell[1] == pos[1]) {
+                        found = false
+                    }
+                })
+                if (found == true) {
+                    mysteries.push([pos[0], pos[1], 0])
                     break
                 }
             }
@@ -278,7 +353,7 @@
                     this.body.push([i, Math.floor(game_size[1] / 2)])
                 }
                 this.dir = []
-                this.speed = 7
+                this.speed = 7.5
                 this.sector = 1
                 this.tail_sector = 1;
                 this.growing = false
@@ -323,6 +398,9 @@
                     document.getElementById("gameover").style.display = "flex"
                     return
                 }
+                if (powerup == "Invincible") {
+                    return
+                }
                 for (var i = 0; i < this.body.length - 1; i++) {
                     if (this.body.at(-1)[0] == this.body[i][0] && this.body.at(-1)[1] == this.body[i][1]) {
                         gameover = true
@@ -343,8 +421,11 @@
                         this.dir.shift()
                     }
                     this.sector --
-                    if (!this.growing) {
+                    if (!this.growing && powerup !== "Grow Up") {
                         this.tail_sector--
+                        this.body.shift()
+                    }
+                    if (powerup == "Shrink Down" && this.body.length > 4) {
                         this.body.shift()
                     }
                     this.growing = false
@@ -361,8 +442,33 @@
                         fruits.splice(fruits.indexOf(fruit), 1)
                         playSound(eating_sound, Math.random() * 0.5 + 0.9, 0.15)
                         newFruit()
+                        if (powerup == "More Fruits") {
+                            newFruit()
+                        }
                         this.growing = true
-                        updateScore(this.body.length - 3)
+                        updateScore(1)
+                        if (powerup == "2x Score") {
+                            updateScore(1)
+                        }
+                        if (Math.random() < 0.1) {
+                            newMystery()
+                        }
+                    }
+                })
+                mysteries.forEach(mystery => {
+                    if (this.body[this.body.length - 1][0] == mystery[0] && this.body[this.body.length - 1][1] == mystery[1]) {
+                        mysteries.splice(mysteries.indexOf(mystery), 1)
+                        playSound(mystery_sound, 1, 0)
+                        var random_number = Math.floor(Math.random() * powerups.length)
+                        powerup = powerups[random_number][0]
+                        powerup_time = powerups[random_number][1]
+
+                        if (powerup == "Speed Up") {
+                            this.speed = 10
+                        }
+                        else if (powerup == "Slow Down") {
+                            this.speed = 5
+                        }
                     }
                 })
             }
@@ -453,7 +559,7 @@
             for (var i = 0; i < 4; i++) {
                 snake.body.push([i, Math.floor(game_size[1] / 2)])
             }
-            updateScore(0)
+            updateScore(-score)
             gameover = false
             fruits = []
             newFruit()
@@ -463,6 +569,7 @@
             snake.tail_sector = 1;
             snake.growing = false
             started = false
+            
         }
 
         function animate(t) {
@@ -470,9 +577,16 @@
             c.clearRect(0, 0, canvas.width, canvas.height)
             if (!started || gameover) {
                 snake.draw()
+                powerup = 0
+                powerup_time = 0
+                current_time = 0
                 fruits.forEach(fruit => {
                     var pos = getCoordinates(fruit[0], fruit[1])
                     c.drawImage(egg, pos[0], pos[1], cell_size, cell_size)
+                })
+                mysteries.forEach(mystery => {
+                    var pos = getCoordinates(mystery[0], mystery[1])
+                    c.drawImage(mystery_egg, pos[0], pos[1], cell_size, cell_size)
                 })
                 return
             }
@@ -481,12 +595,27 @@
             if (isNaN(dt) || dt > 0.1) {
                 dt = 0
             }
-            
+            if (powerup !== "") {
+                current_time += dt
+                powerup_con.style.setProperty("--percent", (powerup_time - current_time) / powerup_time * 100 + "%")
+                if (current_time >= powerup_time) {
+                    powerup = ""
+                    powerup_time = 0
+                    current_time = 0
+                    snake.speed = 7.5
+                }
+                powerup_con.innerHTML = powerup
+            }
             snake.update(dt)
             fruits.forEach(fruit => {
                 var pos = getCoordinates(fruit[0], fruit[1])
                 c.drawImage(egg, pos[0], pos[1] + Math.sin(fruit[2]) * 5, cell_size, cell_size)
                 fruit[2] += dt * 7
+            })
+            mysteries.forEach(mystery => {
+                var pos = getCoordinates(mystery[0], mystery[1])
+                c.drawImage(mystery_egg, pos[0], pos[1] + Math.sin(mystery[2]) * 5, cell_size, cell_size)
+                mystery[2] += dt * 7
             })
         }
         animate()
