@@ -36,7 +36,7 @@ Swipe in the desired direction for the snake's movement
 - If collision happens, the game is over
 - Eat the mysterious egg to get a random powerup
 
-#PowerUps
+# PowerUps
 - Speed up : increases your speed to 10 squares per second for 7 seconds
 - Slow down : decreases your speed to 5 squares per second for 10 seconds
 - More fruits : Each fruits you eat spawns two other fruits for 10 seconds
